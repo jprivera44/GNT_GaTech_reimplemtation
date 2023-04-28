@@ -1,6 +1,7 @@
 import numpy as np
 import torch
 import torch.nn as nn
+from config import use_custom_components
 
 # sin-cose embedding module
 class Embedder(nn.Module):
@@ -87,6 +88,54 @@ class Attention2D(nn.Module):
         x = ((v + pos) * attn).sum(dim=2)
         x = self.dp(self.out_fc(x))
         return x
+
+
+class CustomTransformer2D(nn.Module):
+    def __init__(self, atten_d, ffn_d):
+        super(CustomTransformer2D, self).__init__()
+        self.fq = nn.Linear(atten_d, atten_d)
+        self.fk = nn.Linear(atten_d, atten_d)
+        self.fv = nn.Linear(atten_d, atten_d)
+        self.fp = nn.Linear(4, atten_d)
+        self.fa = nn.Linear(atten_d, atten_d)
+        self.fo = nn.Linear(atten_d, atten_d)
+
+        self.norm = nn.LayerNorm(atten_d)
+        self.relu = nn.ReLU()
+        self.softmax = nn.Softmax(dim=-2)
+
+        self.ffn_norm = nn.LayerNorm(atten_d)
+        self.ffn1 = nn.Linear(atten_d, ffn_d)
+        self.ffn2 = nn.Linear(ffn_d, atten_d)
+
+    def forward(self, q, k, pos, mask=None):
+        # Cross Attention
+        q_res = q
+        q = self.norm(q)
+        q = self.fq(q)
+
+        k = self.fk(k)
+        v = self.fv(k)
+        pos = self.fp(pos)
+
+        a = k - q[:, :, None, :] + pos
+        a = self.softmax(a)
+
+        o = torch.diagonal(torch.matmul(a.permute(0, 1, 3, 2), v), dim1=-2, dim2=-1)
+        o = self.fo(o)
+
+        o = q_res + o
+
+        # FFN
+        o_res = o
+
+        o = self.ffn_norm(o)
+        o = self.ffn1(o)
+        o = self.relu(o)
+        o = self.ffn2(o)
+
+        o = o + o_res
+        return o
 
 
 # View Transformer
@@ -217,12 +266,18 @@ class GNT(nn.Module):
         self.q_fcs = nn.ModuleList([])
         for i in range(args.trans_depth):
             # view transformer
-            view_trans = Transformer2D(
-                dim=args.netwidth,
-                ff_hid_dim=int(args.netwidth * 4),
-                ff_dp_rate=0.1,
-                attn_dp_rate=0.1,
-            )
+            if use_custom_components:
+                view_trans = CustomTransformer2D(
+                    atten_d=args.netwidth,
+                    ffn_d=int(args.netwidth * 4)
+                )
+            else:
+                view_trans = Transformer2D(
+                    dim=args.netwidth,
+                    ff_hid_dim=int(args.netwidth * 4),
+                    ff_dp_rate=0.1,
+                    attn_dp_rate=0.1,
+                )
             self.view_crosstrans.append(view_trans)
             # ray transformer
             ray_trans = Transformer(

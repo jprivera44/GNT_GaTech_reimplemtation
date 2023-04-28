@@ -2,6 +2,8 @@ import torch
 import os
 from gnt.transformer_network import GNT
 from gnt.feature_network import ResUNet
+from gnt.custom_feature_network import FeatureExtractor
+from config import use_custom_components
 
 
 def de_parallel(model):
@@ -38,11 +40,14 @@ class GNTModel(object):
             ).to(device)
 
         # create feature extraction network
-        self.feature_net = ResUNet(
-            coarse_out_ch=self.args.coarse_feat_dim,
-            fine_out_ch=self.args.fine_feat_dim,
-            single_net=self.args.single_net,
-        ).to(device)
+        if use_custom_components:
+            self.feature_net = FeatureExtractor().to(device)
+        else:
+            self.feature_net = ResUNet(
+                coarse_out_ch=self.args.coarse_feat_dim,
+                fine_out_ch=self.args.fine_feat_dim,
+                single_net=self.args.single_net,
+            ).to(device)
 
         # optimizer and learning rate scheduler
         learnable_params = list(self.net_coarse.parameters())
