@@ -11,7 +11,8 @@ eval_dataset = llff_test
 eval_scenes = fern
 
 ### TRAINING
-N_rand = 2048
+#changing this to be 1024 to run on lower compute
+N_rand = 1024
 lrate_feature = 0.001
 lrate_gnt = 0.0005
 lrate_decay_factor = 0.5
