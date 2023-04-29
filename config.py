@@ -1,6 +1,9 @@
 import configargparse
 
 
+use_custom_components = True
+
+
 def config_parser():
     parser = configargparse.ArgumentParser()
     # general
