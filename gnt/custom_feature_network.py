@@ -2,6 +2,19 @@ import torch
 import torch.nn as nn
 
 
+class ShallowFeatureExtractor(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.linear = nn.Conv2d(in_channels=3, out_channels=32, kernel_size=(1,1))
+        self.relu = nn.ReLU()
+
+    def forward(self, x):
+        x = self.linear(x)
+        x = self.relu(x)
+
+        return x, x
+
+
 class FeatureExtractor(nn.Module):
     def __init__(self):
         super().__init__()

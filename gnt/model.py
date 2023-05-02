@@ -2,7 +2,7 @@ import torch
 import os
 from gnt.transformer_network import GNT
 from gnt.feature_network import ResUNet
-from gnt.custom_feature_network import FeatureExtractor
+from gnt.custom_feature_network import FeatureExtractor, ShallowFeatureExtractor
 from config import use_custom_components
 
 

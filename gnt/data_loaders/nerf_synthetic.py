@@ -93,7 +93,7 @@ class NerfSyntheticDataset(Dataset):
         render_pose = self.render_poses[idx]
         render_intrinsics = self.render_intrinsics[idx]
 
-        train_pose_file = os.path.join("/".join(rgb_file.split("/")[:-2]), "transforms_train.json")
+        train_pose_file = os.path.join(self.scene_path, "transforms_train.json")
         train_rgb_files, train_intrinsics, train_poses = read_cameras(train_pose_file)
 
         if self.mode == "train":
