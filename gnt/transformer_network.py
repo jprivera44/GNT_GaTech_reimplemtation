@@ -162,6 +162,10 @@ class Transformer2D(nn.Module):
         return x
 
 
+
+
+
+
 # attention module for self attention.
 # contains several adaptations to incorportate positional information (NOT IN PAPER)
 #   - qk (default) -> only (q.k) attention.
@@ -170,86 +174,171 @@ class Transformer2D(nn.Module):
 class Attention(nn.Module):
     def __init__(self, dim, n_heads, dp_rate, attn_mode="qk", pos_dim=None):
         super(Attention, self).__init__()
-        if attn_mode in ["qk", "gate"]:
-            self.q_fc = nn.Linear(dim, dim, bias=False)
-            self.k_fc = nn.Linear(dim, dim, bias=False)
-        if attn_mode in ["pos", "gate"]:
-            self.pos_fc = nn.Sequential(
-                nn.Linear(pos_dim, pos_dim), nn.ReLU(), nn.Linear(pos_dim, dim // 8)
-            )
-            self.head_fc = nn.Linear(dim // 8, n_heads)
-        if attn_mode == "gate":
-            self.gate = nn.Parameter(torch.ones(n_heads))
-        self.v_fc = nn.Linear(dim, dim, bias=False)
-        self.out_fc = nn.Linear(dim, dim)
-        self.dp = nn.Dropout(dp_rate)
-        self.n_heads = n_heads
-        self.attn_mode = attn_mode
+
+        #creating a self var so it can be accessed from forward
+        self.input_dim = dim
+        self.input_heads = n_heads
+
+        #Layers for q,v, and k
+        # why am I diving by the number of heads?
+        self.q_linear = nn.Linear(dim, dim // n_heads)
+        self.k_linear = nn.Linear(dim, dim // n_heads)
+        self.v_linear = nn.Linear(dim, dim)
+
+
+        #drop out layer for regularization
+        self.layer_drop = nn.Dropout(dp_rate)
+
+        #create the softmax layer
+        self.layer_softmax = nn.Softmax()
+
+        #Handling the 3 methods: Positional info
+
+        #QK mode
+
+        #pos mode
+
+        #gate mode
+    
 
     def forward(self, x, pos=None, ret_attn=False):
-        if self.attn_mode in ["qk", "gate"]:
-            q = self.q_fc(x)
-            q = q.view(x.shape[0], x.shape[1], self.n_heads, -1).permute(0, 2, 1, 3)
-            k = self.k_fc(x)
-            k = k.view(x.shape[0], x.shape[1], self.n_heads, -1).permute(0, 2, 1, 3)
-        v = self.v_fc(x)
-        v = v.view(x.shape[0], x.shape[1], self.n_heads, -1).permute(0, 2, 1, 3)
-
-        if self.attn_mode in ["qk", "gate"]:
-            attn = torch.matmul(q, k.transpose(-2, -1)) / np.sqrt(q.shape[-1])
-            attn = torch.softmax(attn, dim=-1)
-        elif self.attn_mode == "pos":
-            pos = self.pos_fc(pos)
-            attn = self.head_fc(pos[:, :, None, :] - pos[:, None, :, :]).permute(0, 3, 1, 2)
-            attn = torch.softmax(attn, dim=-1)
-        if self.attn_mode == "gate":
-            pos = self.pos_fc(pos)
-            pos_attn = self.head_fc(pos[:, :, None, :] - pos[:, None, :, :]).permute(0, 3, 1, 2)
-            pos_attn = torch.softmax(pos_attn, dim=-1)
-            gate = self.gate.view(1, -1, 1, 1)
-            attn = (1.0 - torch.sigmoid(gate)) * attn + torch.sigmoid(gate) * pos_attn
-            attn /= attn.sum(dim=-1).unsqueeze(-1)
-        attn = self.dp(attn)
-
-        out = torch.matmul(attn, v).permute(0, 2, 1, 3).contiguous()
-        out = out.view(x.shape[0], x.shape[1], -1)
-        out = self.dp(self.out_fc(out))
-        if ret_attn:
-            return out, attn
-        else:
-            return out
 
 
-# Ray Transformer
+      #apply q,k and v
+      q = self.q_linear(x)
+      k = self.k_linear(x)
+      v = self.v_linear(x)
+
+      #q shape
+      #[2275, 64, 16]
+
+      #re-shpaing to handle multiple heads
+      #Q should become, (batch_size, seq_len, n_heads, head_dim)
+      #print("q shape",q.shape)
+
+      #Q
+      q_reshaped = q.view(q.size(0),q.size(1),self.input_heads,-1)
+      q_transp = q_reshaped.transpose(1,2)
+
+      #K
+      k_reshaped = k.view(k.size(0),k.size(1),self.input_heads,-1)
+      k_transp = k_reshaped.transpose(1,2)
+
+
+      #V
+      v_reshaped = v.view(v.size(0),v.size(1),self.input_heads,-1)
+      v_transp = v_reshaped.transpose(1,2)
+
+      #prepare data for the matrix multiplication
+      dim_heads = self.input_dim/self.input_heads
+
+      #divide q by its square root?
+      q_prep = q_transp/torch.sqrt(torch.tensor(dim_heads).float())
+
+      #performing another transpose on K, might be the wrong item in the spot, since you have multiple values of 4
+      k_transp2 = k_transp.transpose(2,3)
+
+
+      ############ATTENTION####################
+      #compute the dot product between q and k
+      attn = torch.matmul(q_prep,k_transp2)
+
+      #now apply a dropout layer
+      attn_drop = self.layer_drop(attn)
+
+      #perform a softmax function call
+      attn_soft = self.layer_softmax(attn_drop)
+
+      ## Print out the attention from softmax
+      
+
+      #multipily  attention scores by v to get outptut
+      #v typical dimensions:
+
+      output = torch.matmul(attn_soft,v_transp)
+      output_concat = torch.cat([output[:, i, :, :] for i in range(self.input_heads)], dim=2)
+
+
+      #output_concat = output_concat.transpose(1,2)
+
+      if ret_attn == True:
+        return output_concat,attn_soft
+      
+      else:
+        return output_concat
+
+
+
+
+# light ray Transformer
 class Transformer(nn.Module):
-    def __init__(
-        self, dim, ff_hid_dim, ff_dp_rate, n_heads, attn_dp_rate, attn_mode="qk", pos_dim=None
-    ):
-        super(Transformer, self).__init__()
-        self.attn_norm = nn.LayerNorm(dim, eps=1e-6)
-        self.ff_norm = nn.LayerNorm(dim, eps=1e-6)
+    def __init__(self, dim, ff_hid_dim, ff_dp_rate, n_heads, attn_dp_rate, attn_mode="qk", pos_dim=None):
 
-        self.ff = FeedForward(dim, ff_hid_dim, ff_dp_rate)
-        self.attn = Attention(dim, n_heads, attn_dp_rate, attn_mode, pos_dim)
+        #needed for defining the nn.module?
+        super(Transformer, self).__init__()
+
+        #create layer normalization
+        self.layer_norm = nn.LayerNorm(normalized_shape=dim)
+
+        #create the multi-headed attention
+        self.layer_MHA  = Attention(dim ,n_heads,attn_dp_rate, attn_mode, pos_dim)
+
+        #post multi head attention norm
+        self.layer_norm_post_MHA = nn.LayerNorm(normalized_shape=dim)
+
+        #calling the pre-defined feed Forward
+        self.layer_FF = FeedForward( dim,ff_hid_dim, ff_dp_rate)
+
 
     def forward(self, x, pos=None, ret_attn=False):
-        residue = x
-        x = self.attn_norm(x)
-        x = self.attn(x, pos, ret_attn)
-        if ret_attn:
-            x, attn = x
-        x = x + residue
 
-        residue = x
-        x = self.ff_norm(x)
-        x = self.ff(x)
-        x = x + residue
+            #call layer norm on x
+            x_norm = self.layer_norm(x)
+            #print("return attention boolean",ret_attn)
 
-        if ret_attn:
-            return x, attn.mean(dim=1)[:, 0]
-        else:
-            return x
+            
+            if ret_attn == True:
+              #pass the x through the multi-headed attention
+              x_att, attn_weights = self.layer_MHA(x_norm,pos,ret_attn)
 
+            else:
+              x_att = self.layer_MHA(x_norm,pos,ret_attn)
+
+            #GENERATE ATTENTION MAPS]
+
+            #print("shape of returned attention map",x_att.shape)
+            
+            #TESTING POST ATTENTION
+            #print("Attention output: x attention shape",x_att.shape)
+            #print("attention weights",attn_weights)
+
+            #after MHA perform layer nrom
+            x_norm2 = self.layer_norm_post_MHA(x_att)
+
+            #call the feed forward function
+            x_FF = self.layer_FF(x_norm2)
+
+            #Now that I've gone through the feed fowrad layer, I need to add this back to my x
+            #TEST
+            #print("x_FF shape",x_FF.shape)
+            #rint("x shape",x.shape)
+
+            #TEST
+            x_residue_result = x_FF + x
+
+            #preparing the return value
+            x_ret = x_residue_result
+
+            #Return
+            if ret_attn == True:
+
+              return(x_ret,attn_weights)
+            
+            else:
+              return(x_ret)
+
+            
+##### My Code
 
 class GNT(nn.Module):
     def __init__(self, args, in_feat_ch=32, posenc_dim=3, viewenc_dim=3, ret_alpha=False):
@@ -261,9 +350,12 @@ class GNT(nn.Module):
         )
 
         # NOTE: Apologies for the confusing naming scheme, here view_crosstrans refers to the view transformer, while the view_selftrans refers to the ray transformer
+        
         self.view_selftrans = nn.ModuleList([])
         self.view_crosstrans = nn.ModuleList([])
         self.q_fcs = nn.ModuleList([])
+
+        
         for i in range(args.trans_depth):
             # view transformer
             if use_custom_components:
@@ -335,6 +427,10 @@ class GNT(nn.Module):
         embed = torch.cat([pts_, viewdirs_], dim=-1)
         input_pts, input_views = torch.split(embed, [self.posenc_dim, self.viewenc_dim], dim=-1)
 
+        #SETTING UP TO ALWAYS RETURN ATTENTION
+        #self.ret_alpha = True
+        
+
         # project rgb features to netwidth
         rgb_feat = self.rgbfeat_fc(rgb_feat)
         # q_init -> maxpool
@@ -350,11 +446,13 @@ class GNT(nn.Module):
             if i % 2 == 0:
                 q = torch.cat((q, input_pts, input_views), dim=-1)
                 q = q_fc(q)
+                
             # ray transformer
             q = selftrans(q, ret_attn=self.ret_alpha)
             # 'learned' density
             if self.ret_alpha:
                 q, attn = q
+                print("Attention is",attn.shape)
         # normalize & rgb
         h = self.norm(q)
         outputs = self.rgb_fc(h.mean(dim=1))
