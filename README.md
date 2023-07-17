@@ -1,4 +1,4 @@
-# Is Attention All That NeRF Needs(GaTech version)?
+# Is Attention All That NeRF Needs?(GaTech version)
 
 
 
