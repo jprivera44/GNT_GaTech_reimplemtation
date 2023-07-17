@@ -1,21 +1,23 @@
-# Is Attention All That NeRF Needs?
+# Is Attention All That NeRF Needs(GaTech version)?
 
 
 
 
-Intro: This is a forked version of the Generalizable NeRF transfomer paper. The intent was re-creating the results of the team, by taking their base architecture re-implementing a variety of the maiin deep learning tasks, and re-training the model from scratch.  The full project paper can be see in the link below, which captures the results. This fork is left here to track the code chanages that were made.
+# Introduction:
+This is a forked version of the Generalizable NeRF transfomer paper. The intent was re-creating the results of the team, by taking their base architecture re-implementing a variety of the maiin deep learning tasks, and re-training the model from scratch.  The full project paper can be see in the link below, which captures the results. This fork is left here to track the code chanages that were made.
 
 
 Link to Georgia Tech Deep learning project paper: [Paper](https://github.com/jprivera44/GaTech-cs7643/blob/main/Project_Report_CS_7643_NeRF_%26_GNT.pdf) 
 
 
 
+ # 
+ # 
 
 
 
 
-
-
+# Original ReadME
 
 [Mukund Varma T](https://mukundvarmat.github.io/)<sup>1*</sup>,
 [Peihao Wang](https://peihaowang.github.io/)<sup>2*</sup>,
